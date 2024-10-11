@@ -1,0 +1,45 @@
+name: build
+
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  build:
+    # Skip building pull requests from the same repository
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != '${{ github.repository }}'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-2022]
+        build_type: [Release]
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Prepare Version
+      shell: cmd
+      run: ./Version.cmd
+    - name: Enable Developer Command Prompt
+      if: startsWith(runner.os, 'Windows')
+      uses: ilammy/msvc-dev-cmd@v1.13.0
+
+    - name: Prepare by Nuget
+      run: nuget restore -verbosity detailed
+
+    - name: Build
+      run: msbuild.exe -nologo -p:Configuration="Release" -p:RestorePackagesConfig=true Notepad3.sln
+
+    - name: Upload generic artifacts
+      uses: actions/upload-artifact@v4.4.0
+      with:
+        name: notepad3-release
+        path: Bin\Release_x64_v143
+
+    - name: zip the result
+      working-directory: ${{ github.workspace }}\Bin\Release_x64_v143
+      run: 7z a notepad3.zip *.exe lng
+
+    - name: upload Release
+      uses: softprops/action-gh-release@master
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: ${{ github.workspace }}\Bin\Release_x64_v143\notepad3.zip
